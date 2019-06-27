@@ -399,7 +399,7 @@ public class ZkJobCoordinator implements JobCoordinator {
 
   @VisibleForTesting
   StartpointManager createStartpointManager(CoordinatorStreamStore metadataStore) {
-    return new StartpointManager(metadataStore);
+    return new StartpointManager(metadataStore, config);
   }
 
   /**

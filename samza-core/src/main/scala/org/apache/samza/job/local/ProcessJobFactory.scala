@@ -74,7 +74,7 @@ class ProcessJobFactory extends StreamJobFactory with Logging {
     metadataResourceUtil.createResources()
 
     // fan out the startpoints
-    val startpointManager = new StartpointManager(coordinatorStreamStore)
+    val startpointManager = new StartpointManager(coordinatorStreamStore, config)
     startpointManager.start()
     try {
       startpointManager.fanOut(JobModelUtil.getTaskToSystemStreamPartitions(jobModel))

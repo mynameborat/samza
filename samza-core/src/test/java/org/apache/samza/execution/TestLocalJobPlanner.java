@@ -203,7 +203,7 @@ public class TestLocalJobPlanner {
     when(coordinationUtils.getLock(anyString())).thenReturn(distributedLock);
 
     ZkMetadataStore zkMetadataStore = mock(ZkMetadataStore.class);
-    when(zkMetadataStore.get(any())).thenReturn(null);
+    when(zkMetadataStore.get(anyString())).thenReturn(null);
     PowerMockito.whenNew(ZkMetadataStore.class).withAnyArguments().thenReturn(zkMetadataStore);
 
     return spy(new LocalJobPlanner(appDesc, coordinationUtils, "FAKE_UID", "FAKE_RUNID"));

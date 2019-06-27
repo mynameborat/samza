@@ -33,7 +33,9 @@ import org.apache.samza.SamzaException;
 import org.apache.samza.config.Config;
 import org.apache.samza.coordinator.stream.CoordinatorStreamKeySerde;
 import org.apache.samza.coordinator.stream.messages.CoordinatorStreamMessage;
+import org.apache.samza.metadatastore.MetadataKey;
 import org.apache.samza.metadatastore.MetadataStore;
+import org.apache.samza.metadatastore.Namespace;
 import org.apache.samza.metrics.MetricsRegistry;
 import org.apache.samza.serializers.JsonSerde;
 import org.apache.samza.serializers.Serde;
@@ -125,22 +127,30 @@ public class CoordinatorStreamStore implements MetadataStore {
   }
 
   @Override
-  public void put(String namespacedKey, byte[] value) {
-    // 1. Store the namespace and key into correct fields of the CoordinatorStreamKey and convert the key to bytes.
-    CoordinatorMessageKey coordinatorMessageKey = deserializeCoordinatorMessageKeyFromJson(namespacedKey);
-    CoordinatorStreamKeySerde keySerde = new CoordinatorStreamKeySerde(coordinatorMessageKey.getNamespace());
-    byte[] keyBytes = keySerde.toBytes(coordinatorMessageKey.getKey());
+  public byte[] get(MetadataKey metadataKey) {
+    CoordinatorMessageKey coordinatorMessageKey = mapMetadataKeyToCoordinatorMessageKey(metadataKey);
+    return get(serializeCoordinatorMessageKeyToJson(coordinatorMessageKey.getNamespace(), coordinatorMessageKey.getKey()));
+  }
 
-    // 2. Set the key, message in correct fields of {@link OutgoingMessageEnvelope} and publish it to the coordinator stream.
-    OutgoingMessageEnvelope envelope = new OutgoingMessageEnvelope(coordinatorSystemStream, 0, keyBytes, value);
-    systemProducer.send(SOURCE, envelope);
-    flush();
+  @Override
+  public void put(String namespacedKey, byte[] value) {
+    put(deserializeCoordinatorMessageKeyFromJson(namespacedKey), value);
+  }
+
+  @Override
+  public void put(MetadataKey metadataKey, byte[] value) {
+    put(mapMetadataKeyToCoordinatorMessageKey(metadataKey), value);
   }
 
   @Override
   public void delete(String namespacedKey) {
     // Since kafka doesn't support individual message deletion, store value as null for a namespacedKey to delete.
     put(namespacedKey, null);
+  }
+
+  @Override
+  public void delete(MetadataKey metadataKey) {
+    put(mapMetadataKeyToCoordinatorMessageKey(metadataKey), null);
   }
 
   @Override
@@ -239,6 +249,30 @@ public class CoordinatorStreamStore implements MetadataStore {
     } catch (IOException e) {
       throw new SamzaException(String.format("Exception occurred when deserializing the coordinatorMsgKey: %s", coordinatorMsgKeyAsJson), e);
     }
+  }
+
+  private CoordinatorMessageKey mapMetadataKeyToCoordinatorMessageKey(MetadataKey metadataKey) {
+    if (metadataKey.getNamespace() != Namespace.CONTROL_MESSAGES) {
+      throw new UnsupportedOperationException("New metadata API doesn't support namespaces except CONTROL_MESSAGES");
+    }
+
+    String[] keys = metadataKey.getKeys();
+
+    Preconditions.checkNotNull(keys);
+    Preconditions.checkArgument(keys.length == 2);
+
+    return new CoordinatorMessageKey(keys[0], keys[1]);
+  }
+
+  private void put(CoordinatorMessageKey coordinatorMessageKey, byte[] value) {
+    // 1. Store the namespace and key into correct fields of the CoordinatorStreamKey and convert the key to bytes.
+    CoordinatorStreamKeySerde keySerde = new CoordinatorStreamKeySerde(coordinatorMessageKey.getNamespace());
+    byte[] keyBytes = keySerde.toBytes(coordinatorMessageKey.getKey());
+
+    // 2. Set the key, message in correct fields of {@link OutgoingMessageEnvelope} and publish it to the coordinator stream.
+    OutgoingMessageEnvelope envelope = new OutgoingMessageEnvelope(coordinatorSystemStream, 0, keyBytes, value);
+    systemProducer.send(SOURCE, envelope);
+    flush();
   }
 
   /**

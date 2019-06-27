@@ -269,7 +269,7 @@ public class TestLocalApplicationRunner {
     when(coordinationUtils.getLock(anyString())).thenReturn(distributedLock);
 
     ZkMetadataStore zkMetadataStore = mock(ZkMetadataStore.class);
-    when(zkMetadataStore.get(any())).thenReturn(null);
+    when(zkMetadataStore.get(anyString())).thenReturn(null);
     PowerMockito.whenNew(ZkMetadataStore.class).withAnyArguments().thenReturn(zkMetadataStore);
 
     ApplicationDescriptorImpl<? extends ApplicationDescriptor> appDesc =
@@ -342,7 +342,7 @@ public class TestLocalApplicationRunner {
     when(coordinationUtils.getClusterMembership()).thenReturn(clusterMembership);
 
     metadataStore = mock(ZkMetadataStore.class);
-    when(metadataStore.get(any())).thenReturn(null);
+    when(metadataStore.get(anyString())).thenReturn(null);
     PowerMockito.whenNew(ZkMetadataStore.class).withAnyArguments().thenReturn(metadataStore);
 
     ApplicationDescriptorImpl<? extends ApplicationDescriptor> appDesc =

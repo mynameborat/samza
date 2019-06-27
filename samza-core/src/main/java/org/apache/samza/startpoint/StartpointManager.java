@@ -35,9 +35,13 @@ import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.samza.SamzaException;
+import org.apache.samza.config.Config;
+import org.apache.samza.config.JobConfig;
 import org.apache.samza.container.TaskName;
 import org.apache.samza.coordinator.metadatastore.NamespaceAwareCoordinatorStreamStore;
+import org.apache.samza.metadatastore.MetadataKey;
 import org.apache.samza.metadatastore.MetadataStore;
+import org.apache.samza.metadatastore.Namespace;
 import org.apache.samza.system.SystemStreamPartition;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
@@ -72,6 +76,9 @@ public class StartpointManager {
   private static final Logger LOG = LoggerFactory.getLogger(StartpointManager.class);
   private static final String NAMESPACE_FAN_OUT = NAMESPACE + "-fan-out";
 
+  private final boolean isMetadataStoreEnabled;
+  private final MetadataStore metadataStore;
+  private final String appId;
   private final NamespaceAwareCoordinatorStreamStore fanOutStore;
   private final NamespaceAwareCoordinatorStreamStore readWriteStore;
   private final ObjectMapper objectMapper = StartpointObjectMapper.getObjectMapper();
@@ -87,7 +94,26 @@ public class StartpointManager {
    * @param metadataStore an instance of {@link MetadataStore} used to read/write the start-points.
    */
   public StartpointManager(MetadataStore metadataStore) {
+    this(metadataStore, null);
+  }
+
+  /**
+   *  Builds the StartpointManager based upon the provided {@link MetadataStore} that is instantiated.
+   *  Setting up a metadata store instance is expensive which requires opening multiple connections
+   *  and reading tons of information. Fully instantiated metadata store is passed in as a constructor argument
+   *  to reuse it across different utility classes.
+   *
+   * @param metadataStore an instance of {@link MetadataStore} used to read/write the start-points.
+   * @param config job configuration
+   */
+  public StartpointManager(MetadataStore metadataStore, Config config) {
     Preconditions.checkNotNull(metadataStore, "MetadataStore cannot be null");
+
+    this.isMetadataStoreEnabled = config != null;
+    this.metadataStore = metadataStore;
+    this.appId = Optional.ofNullable(config)
+        .map(cfg -> new JobConfig(cfg).getJobId())
+        .orElse("dummy");
 
     this.readWriteStore = new NamespaceAwareCoordinatorStreamStore(metadataStore, NAMESPACE);
     this.fanOutStore = new NamespaceAwareCoordinatorStreamStore(metadataStore, NAMESPACE_FAN_OUT);
@@ -143,8 +169,14 @@ public class StartpointManager {
     Preconditions.checkNotNull(ssp, "SystemStreamPartition cannot be null");
     Preconditions.checkNotNull(startpoint, "Startpoint cannot be null");
 
+    String startpointKey = toReadWriteStoreKey(ssp, taskName);
+
     try {
-      readWriteStore.put(toReadWriteStoreKey(ssp, taskName), objectMapper.writeValueAsBytes(startpoint));
+      if (isMetadataStoreEnabled) {
+        metadataStore.put(buildMetadataKey(NAMESPACE, startpointKey), objectMapper.writeValueAsBytes(startpoint));
+      } else {
+        readWriteStore.put(startpointKey, objectMapper.writeValueAsBytes(startpoint));
+      }
     } catch (Exception ex) {
       throw new SamzaException(String.format(
           "Startpoint for SSP: %s and task: %s may not have been written to the metadata store.", ssp, taskName), ex);
@@ -172,7 +204,14 @@ public class StartpointManager {
     Preconditions.checkState(!stopped, "Underlying metadata store not available");
     Preconditions.checkNotNull(ssp, "SystemStreamPartition cannot be null");
 
-    byte[] startpointBytes = readWriteStore.get(toReadWriteStoreKey(ssp, taskName));
+    String startpoinKey = toReadWriteStoreKey(ssp, taskName);
+
+    byte[] startpointBytes;
+    if (isMetadataStoreEnabled) {
+      startpointBytes = metadataStore.get(buildMetadataKey(NAMESPACE, startpoinKey));
+    } else {
+      startpointBytes = readWriteStore.get(startpoinKey);
+    }
 
     if (ArrayUtils.isNotEmpty(startpointBytes)) {
       try {
@@ -207,7 +246,12 @@ public class StartpointManager {
     Preconditions.checkState(!stopped, "Underlying metadata store not available");
     Preconditions.checkNotNull(ssp, "SystemStreamPartition cannot be null");
 
-    readWriteStore.delete(toReadWriteStoreKey(ssp, taskName));
+    String startpointKey = toReadWriteStoreKey(ssp, taskName);
+    if (isMetadataStoreEnabled) {
+      metadataStore.delete(buildMetadataKey(NAMESPACE, startpointKey));
+    } else {
+      readWriteStore.delete(startpointKey);
+    }
   }
 
   /**
@@ -259,9 +303,14 @@ public class StartpointManager {
 
     // Fan out to store
     for (TaskName taskName : fanOuts.keySet()) {
-      String fanOutKey = toFanOutStoreKey(taskName);
+      String fanOutStoreKey = toFanOutStoreKey(taskName);
       StartpointFanOutPerTask newFanOut = fanOuts.get(taskName);
-      fanOutStore.put(fanOutKey, objectMapper.writeValueAsBytes(newFanOut));
+
+      if (isMetadataStoreEnabled) {
+        metadataStore.put(buildMetadataKey(NAMESPACE_FAN_OUT, fanOutStoreKey), objectMapper.writeValueAsBytes(newFanOut));
+      } else {
+        fanOutStore.put(fanOutStoreKey, objectMapper.writeValueAsBytes(newFanOut));
+      }
     }
 
     for (SystemStreamPartition ssp : deleteKeys.keySet()) {
@@ -287,7 +336,15 @@ public class StartpointManager {
     Preconditions.checkState(!stopped, "Underlying metadata store not available");
     Preconditions.checkNotNull(taskName, "TaskName cannot be null");
 
-    byte[] fanOutBytes = fanOutStore.get(toFanOutStoreKey(taskName));
+    String fanOutStoreKey = toFanOutStoreKey(taskName);
+    byte[] fanOutBytes;
+
+    if (isMetadataStoreEnabled) {
+      fanOutBytes = metadataStore.get(buildMetadataKey(NAMESPACE_FAN_OUT, fanOutStoreKey));
+    } else {
+      fanOutBytes = fanOutStore.get(toFanOutStoreKey(taskName));
+    }
+
     if (ArrayUtils.isEmpty(fanOutBytes)) {
       return ImmutableMap.of();
     }
@@ -303,7 +360,12 @@ public class StartpointManager {
     Preconditions.checkState(!stopped, "Underlying metadata store not available");
     Preconditions.checkNotNull(taskName, "TaskName cannot be null");
 
-    fanOutStore.delete(toFanOutStoreKey(taskName));
+    String fanOutStoreKey = toFanOutStoreKey(taskName);
+    if (isMetadataStoreEnabled) {
+      fanOutStore.delete(buildMetadataKey(NAMESPACE_FAN_OUT, fanOutStoreKey));
+    } else {
+      fanOutStore.delete(fanOutStoreKey);
+    }
   }
 
   @VisibleForTesting
@@ -319,6 +381,14 @@ public class StartpointManager {
   @VisibleForTesting
   ObjectMapper getObjectMapper() {
     return objectMapper;
+  }
+
+  private MetadataKey buildMetadataKey(String namespace, String key) {
+    return new MetadataKey.Builder()
+        .setAppId(appId)
+        .setKeys(namespace, key)
+        .setNamespace(Namespace.CONTROL_MESSAGES)
+        .build();
   }
 
   private static Optional<Startpoint> resolveStartpointPrecendence(Optional<Startpoint> startpoint1, Optional<Startpoint> startpoint2) {

@@ -41,6 +41,10 @@ public interface MetadataStore {
    */
   byte[] get(String key);
 
+  default byte[] get(MetadataKey key) {
+    return get(key.toString());
+  }
+
   /**
    * Updates the mapping of the specified key-value pair.
    *
@@ -49,12 +53,20 @@ public interface MetadataStore {
    */
   void put(String key, byte[] value);
 
+  default void put(MetadataKey key, byte[] value) {
+    put(key.toString(), value);
+  }
+
   /**
    * Deletes the mapping for the specified {@code key} from this metadata store (if such mapping exists).
    *
    * @param key the key for which the mapping is to be deleted.
    */
   void delete(String key);
+
+  default void delete(MetadataKey key) {
+    delete(key.toString());
+  }
 
   /**
    * Returns all the entries in this metadata store.

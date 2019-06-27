@@ -18,16 +18,19 @@
  */
 package org.apache.samza.metadatastore;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang3.StringUtils;
 
 
 /**
  * In-memory {@link MetadataStore} with no persistence on disk.
  */
 public class InMemoryMetadataStore implements MetadataStore {
-
+  private static final String KEY_SEPARATOR = ":";
+  private static final String SUB_KEY_SEPARATOR = "-";
   private final ConcurrentHashMap<String, byte[]> memStore = new ConcurrentHashMap<>();
 
   @Override
@@ -39,13 +42,28 @@ public class InMemoryMetadataStore implements MetadataStore {
   }
 
   @Override
+  public byte[] get(MetadataKey key) {
+    return get(buildStoreKeyFromMetadataKey(key));
+  }
+
+  @Override
   public void put(String key, byte[] value) {
     memStore.put(key, value);
   }
 
   @Override
+  public void put(MetadataKey key, byte[] value) {
+    put(buildStoreKeyFromMetadataKey(key), value);
+  }
+
+  @Override
   public void delete(String key) {
     memStore.remove(key);
+  }
+
+  @Override
+  public void delete(MetadataKey key) {
+    delete(buildStoreKeyFromMetadataKey(key));
   }
 
   @Override
@@ -58,4 +76,41 @@ public class InMemoryMetadataStore implements MetadataStore {
 
   @Override
   public void close() { }
+
+  private String buildStoreKeyFromMetadataKey(MetadataKey metadataKey) {
+    Preconditions.checkNotNull(metadataKey.getNamespace(), "Namespace cannot be null");
+    Preconditions.checkArgument(StringUtils.isNotEmpty(metadataKey.getAppId()), "Invalid application id");
+
+    StringBuilder physicalKeyBuilder = new StringBuilder();
+
+    physicalKeyBuilder
+        .append(metadataKey.getNamespace())
+        .append(KEY_SEPARATOR)
+        .append(metadataKey.getAppId());
+
+    String subKey = constructSubKeys(metadataKey.getKeys());
+    if (StringUtils.isNotEmpty(subKey)) {
+      physicalKeyBuilder.append(KEY_SEPARATOR)
+          .append(subKey);
+    }
+
+    if (metadataKey.getVersion() > 0) {
+      physicalKeyBuilder.append(KEY_SEPARATOR)
+          .append(metadataKey.getVersion());
+    }
+
+    return physicalKeyBuilder.toString();
+  }
+
+  private String constructSubKeys(String[] keys) {
+    StringBuilder subKeyBuilder = new StringBuilder();
+
+    for (int i = 0; i < keys.length - 1; i++) {
+      subKeyBuilder.append(keys[i])
+          .append(SUB_KEY_SEPARATOR);
+    }
+
+    subKeyBuilder.append(keys[keys.length - 1]);
+    return subKeyBuilder.toString();
+  }
 }

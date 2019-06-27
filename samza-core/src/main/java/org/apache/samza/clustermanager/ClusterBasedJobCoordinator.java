@@ -400,7 +400,7 @@ public class ClusterBasedJobCoordinator {
 
   @VisibleForTesting
   StartpointManager createStartpointManager() {
-    return new StartpointManager(coordinatorStreamStore);
+    return new StartpointManager(coordinatorStreamStore, config);
   }
 
   @VisibleForTesting
