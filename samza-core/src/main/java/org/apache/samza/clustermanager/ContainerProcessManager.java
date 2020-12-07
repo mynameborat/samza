@@ -131,12 +131,14 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
    */
   private final Map<String, ProcessorFailure> processorFailures = new HashMap<>();
 
+  private final boolean restartContainers;
+
   private ContainerProcessManagerMetrics containerProcessManagerMetrics;
   private JvmMetrics jvmMetrics;
   private Map<String, MetricsReporter> metricsReporters;
 
   public ContainerProcessManager(Config config, SamzaApplicationState state, MetricsRegistryMap registry,
-      ContainerPlacementMetadataStore metadataStore, LocalityManager localityManager) {
+      ContainerPlacementMetadataStore metadataStore, LocalityManager localityManager, boolean restartContainers) {
     Preconditions.checkNotNull(localityManager, "Locality manager cannot be null");
     this.state = state;
     this.clusterManagerConfig = new ClusterManagerConfig(config);
@@ -175,6 +177,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
 
     this.containerAllocator = new ContainerAllocator(this.clusterResourceManager, config, state, hostAffinityEnabled, this.containerManager);
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
+    this.restartContainers = restartContainers;
     LOG.info("Finished container process manager initialization.");
   }
 
@@ -200,6 +203,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       () -> new ContainerAllocator(this.clusterResourceManager, clusterManagerConfig, state,
           hostAffinityEnabled, this.containerManager));
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
+    this.restartContainers = false;
     LOG.info("Finished container process manager initialization");
   }
 
@@ -257,7 +261,14 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     });
     if (jobConfig.getApplicationMasterHighAvailabilityEnabled()) {
       // don't request resource for container that is already running
-      state.runningProcessors.keySet().forEach(processorToHost::remove);
+      state.runningProcessors.forEach((processorId, samzaResource) -> {
+        LOG.info("Not requesting container for processorId: {} since its already running as containerId: {}",
+            processorId, samzaResource.getContainerId());
+        processorToHost.remove(processorId);
+        if (restartContainers) {
+          clusterResourceManager.stopStreamProcessor(samzaResource);
+        }
+      });
     }
     containerAllocator.requestResources(processorToHost);
 
