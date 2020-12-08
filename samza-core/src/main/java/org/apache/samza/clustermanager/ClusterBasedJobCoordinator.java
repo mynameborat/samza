@@ -490,7 +490,7 @@ public class ClusterBasedJobCoordinator {
   @VisibleForTesting
   JobCoordinatorMetadataManager createJobCoordinatorMetadataManager() {
     return new JobCoordinatorMetadataManager(new NamespaceAwareCoordinatorStreamStore(metadataStore,
-        SetJobCoordinatorMetadataMessage.TYPE), YARN_CLUSTER, metrics);
+        SetJobCoordinatorMetadataMessage.TYPE), JobCoordinatorMetadataManager.ClusterType.YARN, metrics);
   }
 
   @VisibleForTesting
