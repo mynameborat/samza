@@ -210,7 +210,7 @@ public class TestYarnClusterResourceManager {
     String containerId = "Yarn_Container_id_0";
     YarnContainer runningYarnContainer = mock(YarnContainer.class);
     ContainerId previousRunningContainerId = mock(ContainerId.class);
-        YarnAppState yarnAppState = Mockito.spy(new YarnAppState(0, mock(ContainerId.class), "host", 8080, 8081));
+    YarnAppState yarnAppState = Mockito.spy(new YarnAppState(0, mock(ContainerId.class), "host", 8080, 8081));
 
     yarnAppState.runningProcessors.put(containerId, runningYarnContainer);
     when(runningYarnContainer.id()).thenReturn(previousRunningContainerId);
