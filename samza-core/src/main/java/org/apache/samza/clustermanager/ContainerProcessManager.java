@@ -188,7 +188,8 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       ClusterResourceManager resourceManager,
       Optional<ContainerAllocator> allocator,
       ContainerManager containerManager,
-      LocalityManager localityManager) {
+      LocalityManager localityManager,
+      boolean restartContainers) {
     this.state = state;
     this.clusterManagerConfig = clusterManagerConfig;
     this.jobConfig = new JobConfig(clusterManagerConfig);
@@ -203,7 +204,7 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
       () -> new ContainerAllocator(this.clusterResourceManager, clusterManagerConfig, state,
           hostAffinityEnabled, this.containerManager));
     this.allocatorThread = new Thread(this.containerAllocator, "Container Allocator Thread");
-    this.restartContainers = false;
+    this.restartContainers = restartContainers;
     LOG.info("Finished container process manager initialization");
   }
 
@@ -252,12 +253,12 @@ public class ContainerProcessManager implements ClusterResourceManager.Callback 
     // Request initial set of containers
     LocalityModel localityModel = localityManager.readLocality();
     Map<String, String> processorToHost = new HashMap<>();
-    state.jobModelManager.jobModel().getContainers().keySet().forEach((containerId) -> {
-      String host = Optional.ofNullable(localityModel.getProcessorLocality(containerId))
+    state.jobModelManager.jobModel().getContainers().keySet().forEach((processorId) -> {
+      String host = Optional.ofNullable(localityModel.getProcessorLocality(processorId))
           .map(ProcessorLocality::host)
           .filter(StringUtils::isNotBlank)
           .orElse(null);
-      processorToHost.put(containerId, host);
+      processorToHost.put(processorId, host);
     });
     if (jobConfig.getApplicationMasterHighAvailabilityEnabled()) {
       // don't request resource for container that is already running

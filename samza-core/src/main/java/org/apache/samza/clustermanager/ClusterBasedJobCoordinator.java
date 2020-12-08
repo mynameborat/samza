@@ -346,10 +346,9 @@ public class ClusterBasedJobCoordinator {
    *
    * @param jobModel job model used to generate the job coordinator metadata
    */
-  private void generateAndUpdateJobCoordinatorMetadata(JobModel jobModel) {
-    JobCoordinatorMetadataManager jobCoordinatorMetadataManager =
-        new JobCoordinatorMetadataManager(new NamespaceAwareCoordinatorStreamStore(metadataStore,
-            SetJobCoordinatorMetadataMessage.TYPE), YARN_CLUSTER, metrics);
+  @VisibleForTesting
+  void generateAndUpdateJobCoordinatorMetadata(JobModel jobModel) {
+    JobCoordinatorMetadataManager jobCoordinatorMetadataManager = createJobCoordinatorMetadataManager();
 
     JobCoordinatorMetadata previousMetadata = jobCoordinatorMetadataManager.readJobCoordinatorMetadata();
     JobCoordinatorMetadata newMetadata = jobCoordinatorMetadataManager.generateJobCoordinatorMetadata(jobModel, config);
@@ -486,5 +485,16 @@ public class ClusterBasedJobCoordinator {
   ContainerProcessManager createContainerProcessManager() {
     return new ContainerProcessManager(config, state, metrics, containerPlacementMetadataStore, localityManager,
         metadataChangedAcrossAttempts);
+  }
+
+  @VisibleForTesting
+  JobCoordinatorMetadataManager createJobCoordinatorMetadataManager() {
+    return new JobCoordinatorMetadataManager(new NamespaceAwareCoordinatorStreamStore(metadataStore,
+        SetJobCoordinatorMetadataMessage.TYPE), YARN_CLUSTER, metrics);
+  }
+
+  @VisibleForTesting
+  boolean isMetadataChangedAcrossAttempts() {
+    return metadataChangedAcrossAttempts;
   }
 }

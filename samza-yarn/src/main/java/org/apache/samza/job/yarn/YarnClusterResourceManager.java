@@ -19,6 +19,7 @@
 
 package org.apache.samza.job.yarn;
 
+import com.google.common.annotations.VisibleForTesting;
 import java.time.Duration;
 import java.util.Set;
 import org.apache.hadoop.fs.FileStatus;
@@ -760,5 +761,10 @@ public class YarnClusterResourceManager extends ClusterResourceManager implement
       log.warn("Did not find the Processor ID for the start notification for Container ID: {}. " +
           "Ignoring notification.", containerId);
     }
+  }
+
+  @VisibleForTesting
+  ConcurrentHashMap<SamzaResource, Container> getAllocatedResources() {
+    return allocatedResources;
   }
 }
