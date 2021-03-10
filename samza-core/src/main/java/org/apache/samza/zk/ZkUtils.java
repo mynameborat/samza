@@ -503,6 +503,16 @@ public class ZkUtils {
   }
 
   /**
+   * Read the last active job model version used by the quorum from ZK.
+   * @return most recent active job model version
+   */
+  public String getLastActiveJobModelVersion() {
+    String activeJobModelVersion = zkClient.readData(keyBuilder.getActiveJobModelVersionPath(), true);
+    metrics.reads.inc();
+    return activeJobModelVersion;
+  }
+
+  /**
    * Generates the next JobModel version that should be used by a processor group in a rebalancing phase
    * for coordination.
    * @param currentJobModelVersion the current version of JobModel.
@@ -553,6 +563,21 @@ public class ZkUtils {
     }
     LOG.info("published new version: " + newVersion + "; expected data version = " + (dataVersion + 1) +
         "(actual data version after update = " + stat.getVersion() + ")");
+  }
+
+  /**
+   * Publish the active job model version to zookeeper
+   * @param version active job model version
+   */
+  public void publishActiveJobModelVersion(String version) {
+    try {
+      zkClient.writeData(keyBuilder.getActiveJobModelVersionPath(), version);
+      metrics.writes.inc();
+    } catch (Exception e) {
+      LOG.error("Failed to persist the active job model version = {} due to {}", version, e);
+      // TODO: should this be treated fatal
+    }
+    LOG.info("Published the active job model version = {} to zookeeper successfully.", version);
   }
 
   // validate that Zk protocol currently used by the job is the same as in this participant

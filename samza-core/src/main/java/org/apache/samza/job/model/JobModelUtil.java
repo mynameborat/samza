@@ -100,6 +100,31 @@ public class JobModelUtil {
     }
   }
 
+  public static boolean compareJobModelForProcessor(String processorId, JobModel previousJobModel, JobModel currentJobModel) {
+    if (previousJobModel == currentJobModel) {
+      return true;
+    }
+
+    if (previousJobModel == null || currentJobModel == null) {
+      return false;
+    }
+
+    return compareContainerModel(previousJobModel.getContainers().get(processorId),
+        currentJobModel.getContainers().get(processorId));
+  }
+
+  public static boolean compareContainerModel(ContainerModel first, ContainerModel second) {
+    if (first == second) {
+      return true;
+    }
+
+    if (first == null || second == null) {
+      return false;
+    }
+
+    return first.equals(second);
+  }
+
   private static String getJobModelKey(String version) {
     return String.format("%s/%s", JOB_MODEL_GENERATION_KEY, version);
   }

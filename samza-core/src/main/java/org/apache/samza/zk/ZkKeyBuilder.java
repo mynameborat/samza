@@ -27,6 +27,7 @@ import com.google.common.base.Strings;
  *   - /
  *      |- groupId/
  *          |- JobModelGeneration/
+ *              |- activeJobModelVersion (data contains the latest active job model version used by the quorum)
  *              |- jobModelVersion (data contains the version)
  *              |- jobModelUpgradeBarrier/ (contains barrier related data)
  *              |- jobModels/
@@ -43,6 +44,7 @@ import com.google.common.base.Strings;
  */
 public class ZkKeyBuilder {
 
+  static final String ACTIVE_JOBMODEL_VERSION_PATH = "activeJobModelVersion";
   static final String PROCESSORS_PATH = "processors";
   static final String JOBMODEL_GENERATION_PATH = "jobModelGeneration";
   static final String JOB_MODEL_UPGRADE_BARRIER_PATH = "jobModelUpgradeBarrier";
@@ -87,6 +89,10 @@ public class ZkKeyBuilder {
 
   String getJobModelVersionPath() {
     return String.format("%s/%s/jobModelVersion", getRootPath(), JOBMODEL_GENERATION_PATH);
+  }
+
+  String getActiveJobModelVersionPath() {
+    return String.format("%s/%s/activeJobModelVersion", getRootPath(), ACTIVE_JOBMODEL_VERSION_PATH);
   }
 
   String getJobModelPathPrefix() {
